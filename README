@@ -1,0 +1,21 @@
+charemap
+========
+
+Tiny program to play with substitution ciphers that works also with
+non-standard characters.
+
+
+Requirements
+------------
+A C compiler.
+
+
+Installation
+------------
+In order to compile charemap, simply type `make'. No installation required.
+
+
+Running charemap
+----------------
+See ./charemap -h
+
