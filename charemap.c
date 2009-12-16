@@ -279,16 +279,17 @@ main(int argc, char *argv[]) {
 		printf("Non-option argument %s\n", argv[i]);
 		die("Try `-h' for more information.");
 	}
-	if(strlen(in) == 0) {
-		die("You need at least an input file!\nTry `-h' for more information.");
-	}
 	/* set default language */
 	if(strlen(lang) == 0)
 		strcpy(lang, "en");
-        if((fi = fopen(in, "r")) == NULL)
-	                die("Input file not found.");
 	/* load language file into map */
 	mapl = load_lang(lang, map);
+	/* check for an input file */
+	if(strlen(in) == 0) {
+		die("You need at least an input file!\nTry `-h' for more information.");
+	}
+        if((fi = fopen(in, "r")) == NULL)
+	                die("Input file not found.");
 	/* create relation */
 	rl = initialize(r, fi);
 	/* sort array */
