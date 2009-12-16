@@ -101,7 +101,8 @@ load_lang(char *l, char *map) {
 	strcpy(fname, "languages/");
 	strcat(fname, l);
 	strcat(fname, ".txt");
-	f = fopen(fname, "r");
+	if((f = fopen(fname, "r")) == NULL) 
+		die("Language file not found.");
 	c = fgetc(f);
 	while(c != EOF) {
 		map[i++] = c;
@@ -284,7 +285,8 @@ main(int argc, char *argv[]) {
 	/* set default language */
 	if(strlen(lang) == 0)
 		strcpy(lang, "en");
-	fi = fopen(in, "r");
+        if((fi = fopen(in, "r")) == NULL)
+	                die("Input file not found.");
 	/* load language file into map */
 	mapl = load_lang(lang, map);
 	/* create relation */
