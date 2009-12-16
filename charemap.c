@@ -1,7 +1,7 @@
 /*
  * Author:	Marco Squarcina <lavish@gmail.com>
- * Date:	15/12/2009
- * Version:	0.1
+ * Date:	16/12/2009
+ * Version:	0.2
  * License:	MIT, see LICENSE for details
  * Description:	Tiny program to play with substitution ciphers (works also with
  * 		non-standard characters).
@@ -14,7 +14,7 @@
 #include <unistd.h>
 #include <getopt.h>
 
-#define N	256
+#define N	512
 
 /* structs */
 typedef struct {
@@ -24,12 +24,13 @@ typedef struct {
 } Relation;
 
 /* function declarations */
-static void die(const char *error);
-static void usage(void);
-static char substitute(Relation r[], char c, int rl);
-static void sort_by_occ(Relation r[], int l);
 static int load_lang(char *l, char *map);
 static int initialize(Relation r[], FILE *fi);
+static int isletter(char c);
+static char substitute(Relation r[], char c, int rl);
+static void usage(void);
+static void die(const char *error);
+static void sort_by_occ(Relation r[], int l);
 static void associate(Relation r[], int rl, char map[], int mapl);
 static void show_occ(Relation r[], int rl);
 static void print_file(Relation r[], int rl, FILE *fi);
@@ -38,6 +39,7 @@ static void print_video(Relation r[], int rl, FILE *fi);
 /* variables */
 static int show = 0;
 static int case_sensitive = 0;
+static int alphabetic_only = 0;
 static char in[N];
 static char out[N];
 static char lang[N];
@@ -52,11 +54,12 @@ die(const char *errstr) {
 void
 usage() {
 	printf("Usage: charemap [options]...\nOptions:\n");
-	printf("  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n",
+	printf("  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n",
 		"-h",		"This help",
 		"-v",		"Print version",
-		"-s",		"Show only char occurrences and mapping",
+		"-s",		"Show only character occurrences and mapping",
 		"-c",		"Case sensitive",
+		"-a",		"Remap alphabetic characters only (preserves dots, blanks and so on...)",
 		"-i <file>",	"Input file to parse",
 		"-o <file>",	"Output file with remapped characters",
 		"-l <language>","Try to decrypt using the selected language (default: en)");
@@ -110,6 +113,13 @@ load_lang(char *l, char *map) {
 }
 
 int
+isletter(char c) {
+	if(c < 'A' || c > 'z' || (c > 'Z' && c < 'a'))
+		return 0;
+	return 1;
+}
+
+int
 initialize(Relation *r, FILE *fi) {
 	int c, i, j;
 
@@ -150,7 +160,7 @@ associate(Relation r[], int rl, char map[], int mapl) {
 	int i, j;
 
 	for(i=0, j=0; i<rl;) {
-                if(r[i].orig == '\n' || r[i].orig == ' ') {
+		if(alphabetic_only && !isletter(r[i].orig)) {
 			r[i].new = r[i].orig;
                         i++;
 		}
@@ -170,13 +180,22 @@ show_occ(Relation r[], int rl) {
 		"-----------------------------------------------------"
 	);
 	/* print array r */
-	for(i = 0; i < rl; i++) 
-		if(r[i].orig == ' ')
-			printf("%15s | %15d | %15s |\n", "' '", r[i].occ, "' '");
-		else if(r[i].orig == '\n')
-			printf("%15s | %15d | %15s |\n", "\\n", r[i].occ, "\\n");
-		else
-			printf("%15c | %15d | %15c |\n", r[i].orig, r[i].occ, r[i].new);
+	for(i = 0; i < rl; i++)
+		if(alphabetic_only) {
+			if(r[i].orig == ' ')
+				printf("%15s | %15d | %15s |\n", "' '", r[i].occ, "' '");
+			else if(r[i].orig == '\n')
+				printf("%15s | %15d | %15s |\n", "\\n", r[i].occ, "\\n");
+			else
+				printf("%15c | %15d | %15c |\n", r[i].orig, r[i].occ, r[i].new);
+		} else {
+			if(r[i].orig == ' ')
+				printf("%15s | %15d | %15c |\n", "' '", r[i].occ, r[i].new);
+			else if(r[i].orig == '\n')
+				printf("%15s | %15d | %15c |\n", "\\n", r[i].occ, r[i].new);
+			else
+				printf("%15c | %15d | %15c |\n", r[i].orig, r[i].occ, r[i].new);
+		}
 }
 
 void
@@ -218,7 +237,7 @@ main(int argc, char *argv[]) {
 
 	/* handle command line options */
 	opterr = 0;
-	while((c = getopt(argc, argv, "vschi:o:l:")) != -1)
+	while((c = getopt(argc, argv, "vscahi:o:l:")) != -1)
 		switch(c) {
 			case 'v':
 				die("charemap-"VERSION", © 2009 Marco Squarcina, see LICENSE for details");
@@ -228,6 +247,9 @@ main(int argc, char *argv[]) {
 				break;
 			case 'c':
 				case_sensitive = 1;
+				break;
+			case 'a':
+				alphabetic_only = 1;
 				break;
 			case 'h':
 				usage();

@@ -2,7 +2,7 @@
 # See LICENSE file for copyright and license details.
 
 SRC = charemap.c
-VERSION = 0.1
+VERSION = 0.2
 CFLAGS = -std=c99 -pedantic -Wall -O2 -DVERSION=\"${VERSION}\"
 CC = gcc
 
