@@ -26,7 +26,6 @@ typedef struct {
 /* function declarations */
 static int load_lang(char *l, char *map);
 static int initialize(Relation r[], FILE *fi);
-static int isletter(char c);
 static char substitute(Relation r[], char c, int rl);
 static void usage(void);
 static void die(const char *error);
@@ -114,13 +113,6 @@ load_lang(char *l, char *map) {
 }
 
 int
-isletter(char c) {
-	if(c < 'A' || c > 'z' || (c > 'Z' && c < 'a'))
-		return 0;
-	return 1;
-}
-
-int
 initialize(Relation *r, FILE *fi) {
 	int c, i, j;
 
@@ -161,7 +153,7 @@ associate(Relation r[], int rl, char map[], int mapl) {
 	int i, j;
 
 	for(i=0, j=0; i<rl;) {
-		if(alphabetic_only && !isletter(r[i].orig)) {
+		if(alphabetic_only && !isalpha(r[i].orig)) {
 			r[i].new = r[i].orig;
                         i++;
 		}
