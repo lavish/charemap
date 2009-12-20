@@ -7,7 +7,7 @@ non-standard characters.
 
 Requirements
 ------------
-A C compiler.
+Glib, GNU make and a C compiler.
 
 
 Installation

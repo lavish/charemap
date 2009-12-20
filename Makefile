@@ -2,12 +2,14 @@
 # See LICENSE file for copyright and license details.
 
 SRC = charemap.c
-VERSION = 0.2
-CFLAGS = -std=c99 -pedantic -Wall -O2 -DVERSION=\"${VERSION}\"
+VERSION = 0.3
+CFLAGS = -std=c99 -pedantic -Wall -O3 -DVERSION=\"${VERSION}\"
+CPPFLAGS = $(shell pkg-config glib-2.0 --cflags)
+LDLIBS = $(shell pkg-config glib-2.0 --libs)
 CC = gcc
 
 charemap: charemap.c options
-	${CC} ${CFLAGS} -o $@ $<
+	${CC} ${CFLAGS} ${CPPFLAGS} ${LDLIBS} -o $@ $<
 
 options:
 	@echo charemap build options:

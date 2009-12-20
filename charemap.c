@@ -1,7 +1,7 @@
 /*
  * Author:	Marco Squarcina <lavish@gmail.com>
- * Date:	16/12/2009
- * Version:	0.2
+ * Date:	20/12/2009
+ * Version:	0.3
  * License:	MIT, see LICENSE for details
  * Description:	Tiny program to play with substitution ciphers (works also with
  * 		non-standard characters).
@@ -13,35 +13,60 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <getopt.h>
+#include <sys/queue.h>
+#include <glib.h>
 
-#define N	512
+#define N	256
 
 /* structs */
 typedef struct {
-	char orig;
+	unsigned char orig;
 	int occ;
-	char new;
+	unsigned char new;
 } Relation;
 
+typedef struct {
+        int bigram[2];
+        int occ;
+} Bigram;
+
+typedef struct {
+	int trigram[3];
+	int occ;
+} Trigram;
+
 /* function declarations */
-static int load_lang(char *l, char *map);
-static int initialize(Relation r[], FILE *fi);
-static char substitute(Relation r[], char c, int rl);
-static void usage(void);
 static void die(const char *error);
-static void sort_by_occ(Relation r[], int l);
-static void associate(Relation r[], int rl, char map[], int mapl);
-static void show_occ(Relation r[], int rl);
-static void print_file(Relation r[], int rl, FILE *fi);
-static void print_video(Relation r[], int rl, FILE *fi);
+static void usage(void);
+static char substitute(char c);
+static void sort_by_occ(void);
+static int load_lang(char *l, char *map);
+static int initialize(FILE *fi);
+static void associate(void);
+static void print_char_occ(void);
+static void print_file(FILE *fi);
+static void print_video(FILE *fi);
+static void bubble_up(GList *a, GList *b, GList *x, GList *c);
+static void count_bigrams(FILE *fi);
+static void count_trigrams(FILE *fi);
+static void print_bigrams(void);
+static void print_trigrams(void);
 
 /* variables */
-static int show = 0;
+static int show_occ = 0;
+static int show_bigrams = 0;
+static int show_trigrams = 0;
 static int case_sensitive = 0;
-static int alphabetic_only = 0;
+static int alpha_only = 0;
+static int print_substituted = 0;
 static char in[N];
 static char out[N];
 static char lang[N];
+static Relation r[N];
+static char map[N];
+static int rl, mapl;
+static GList *bigram_list = NULL;
+static GList *trigram_list = NULL;
 
 /* function implementations */
 void
@@ -53,12 +78,15 @@ die(const char *errstr) {
 void
 usage() {
 	printf("Usage: charemap [options]...\nOptions:\n");
-	printf("  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n",
+	printf("  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n",
 		"-h",		"This help",
 		"-v",		"Print version",
 		"-s",		"Show only character occurrences and mapping",
 		"-c",		"Case sensitive",
-		"-a",		"Remap alphabetic characters only (preserves dots, blanks and so on...)",
+		"-a",		"Remap alpha characters only (preserves dots, blanks and so on...)",
+		"-p",		"Print substituted text",
+		"-b",		"Show bigrams",
+		"-t",		"Show trigrams",
 		"-i <file>",	"Input file to parse",
 		"-o <file>",	"Output file with remapped characters",
 		"-l <language>","Try to decrypt using the selected language (default: en)");
@@ -66,7 +94,7 @@ usage() {
 }
 
 char
-substitute(Relation r[], char c, int rl) {
+substitute(char c) {
         int i;
 
         if(!case_sensitive)
@@ -78,12 +106,12 @@ substitute(Relation r[], char c, int rl) {
 }
 
 void
-sort_by_occ(Relation *r, int l) {
+sort_by_occ() {
 	Relation tmp;
 	int i, j;
 
-	for (i = 1; i < l; i++)
-		for ( j = 0; j < l - 1; j++ ) 
+	for (i = 1; i < rl; i++)
+		for ( j = 0; j < rl - 1; j++ ) 
 			if(r[j].occ < r[j+1].occ ) {
 				tmp = r[j];
 				r[j] = r[j+1];
@@ -113,10 +141,10 @@ load_lang(char *l, char *map) {
 }
 
 int
-initialize(Relation *r, FILE *fi) {
+initialize(FILE *fi) {
 	int c, i, j;
 
-	/* set initial state */
+	/* reset the relation vector */
 	for(i = 0; i < N; i++) {
 		r[i].occ = 0;
 		r[i].new = '?';
@@ -126,14 +154,15 @@ initialize(Relation *r, FILE *fi) {
 	if(!case_sensitive)
 		c = tolower(c);
 	/* count occurrences */
-	for(i = 0; c != EOF;) {
-		for(j = 0; j <= i; j++)
+	for(i=0; c != EOF;) {
+		for(j = 0; j < i; j++) {
 			if(r[j].orig == c) {
 				/* char already in r */
 				r[j].occ += 1;
 				break;
 			}
-		if(i == j-1) {
+		}
+		if(j >= i) {
 			/* this is a new entry */
 			r[i].orig = c;
 			r[i].occ = 1;
@@ -143,17 +172,16 @@ initialize(Relation *r, FILE *fi) {
 		if(!case_sensitive)
 			c = tolower(c);
 	}
-	
 	/* return r length */
 	return i;
 }
 
 void
-associate(Relation r[], int rl, char map[], int mapl) {
+associate() {
 	int i, j;
 
 	for(i=0, j=0; i<rl;) {
-		if(alphabetic_only && !isalpha(r[i].orig)) {
+		if(alpha_only && !isalpha(r[i].orig)) {
 			r[i].new = r[i].orig;
                         i++;
 		}
@@ -165,7 +193,7 @@ associate(Relation r[], int rl, char map[], int mapl) {
 }
 
 void
-show_occ(Relation r[], int rl) {
+print_char_occ() {
 	int i;
 
 	printf("%15s | %15s | %15s |\n%s\n",
@@ -174,7 +202,7 @@ show_occ(Relation r[], int rl) {
 	);
 	/* print array r */
 	for(i = 0; i < rl; i++)
-		if(alphabetic_only) {
+		if(alpha_only) {
 			if(r[i].orig == ' ')
 				printf("%15s | %15d | %15s |\n", "' '", r[i].occ, "' '");
 			else if(r[i].orig == '\n')
@@ -192,7 +220,7 @@ show_occ(Relation r[], int rl) {
 }
 
 void
-print_file(Relation r[], int rl, FILE *fi) {
+print_file(FILE *fi) {
 	FILE *fo;
 	int c;
 
@@ -200,49 +228,206 @@ print_file(Relation r[], int rl, FILE *fi) {
 	fo = fopen(out, "w");
 	c = fgetc(fi);
 	while(c != EOF) {
-		putc(substitute(r, c, rl), fo);
+		putc(substitute(c), fo);
 		c = fgetc(fi);
 	}
 	fclose(fo);
 }
 
 void
-print_video(Relation r[], int rl, FILE *fi) {
+print_video(FILE *fi) {
 	int c;
 
 	rewind(fi);
 	printf("Substitution output:\n");
 	c = fgetc(fi);
 	while(c != EOF) {
-		putc(substitute(r, c, rl), stdout);
+		putc(substitute(c), stdout);
 		c = fgetc(fi);
 	}
 }
 
+void
+bubble_up(GList *a, GList *b, GList *x, GList *c) {
+	/* a <--> b <--> x <--> c */
+	a = x->prev->prev;
+	b = x->prev;
+	c = x->next;
+
+	/* a <--> b -> c */
+	b->next = c;
+	if(c != NULL)
+		/* a <--> b <--> c */
+		c->prev = b;
+	if(a != NULL)
+		/* a <- b <--> c */
+		a->next = x;
+	/* a -> x <- b <--> c */
+	b->prev = x;
+	/* a <--> x <- b <--> c */
+	x->prev = a;
+	/* a <--> x <--> b <--> c */
+	x->next = b;
+}
+
+void
+count_bigrams(FILE *fi) {
+	int a0, a1;
+	Bigram *tmp = NULL;
+	GList *iter = NULL;
+	
+	rewind(fi);
+	a0 = fgetc(fi);
+	a1 = fgetc(fi);
+	while(1) {
+		while(a1 != EOF && alpha_only && (!isalpha(a0) || !isalpha(a1))) {
+			a0 = a1;
+			a1 = fgetc(fi);
+		}
+		if(a1 == EOF)
+			break;
+	        if(!case_sensitive) {
+			a0 = tolower(a0);
+			a1 = tolower(a1);
+		}
+		iter = g_list_first(bigram_list);
+		while(iter != NULL) {
+			if(((Bigram *)iter->data)->bigram[0] == a0 &&
+			   ((Bigram *)iter->data)->bigram[1] == a1) {
+				/* bigram already in list */
+				((Bigram *)iter->data)->occ += 1;
+				while(iter->prev != NULL && ((Bigram *)iter->prev->data)->occ < ((Bigram *)iter->data)->occ)
+					bubble_up(iter->prev->prev, iter->prev, iter, iter->next);
+				break;
+			}
+			iter = iter->next;
+		}
+		if(iter == NULL) {
+			/* this is a new trigram */
+			tmp = malloc(sizeof(Bigram));
+			tmp->bigram[0] = a0;
+			tmp->bigram[1] = a1;
+			tmp->occ = 1;
+			bigram_list = g_list_append(bigram_list, tmp);
+		}
+		/* go on */
+		a0 = a1;
+		a1 = fgetc(fi);
+	}
+}
+
+void
+count_trigrams(FILE *fi) {
+	int a0, a1, a2;
+	Trigram *tmp = NULL;
+	GList *iter = NULL;
+	
+	rewind(fi);
+	a0 = fgetc(fi);
+	a1 = fgetc(fi);
+	a2 = fgetc(fi);
+	while(1) {
+		while(a2 != EOF && alpha_only && (!isalpha(a0) || !isalpha(a1) || !isalpha(a2))) {
+			a0 = a1;
+			a1 = a2;
+			a2 = fgetc(fi);
+		}
+		if(a2 == EOF)
+			break;
+	        if(!case_sensitive) {
+			a0 = tolower(a0);
+			a1 = tolower(a1);
+			a2 = tolower(a2);
+		}
+		iter = g_list_first(trigram_list);
+		while(iter != NULL) {
+			if(((Trigram *)iter->data)->trigram[0] == a0 &&
+			   ((Trigram *)iter->data)->trigram[1] == a1 &&
+			   ((Trigram *)iter->data)->trigram[2] == a2) {
+				/* trigram already in list */
+				((Trigram *)iter->data)->occ += 1;
+				while(iter->prev != NULL && ((Trigram *)iter->prev->data)->occ < ((Trigram *)iter->data)->occ)
+					bubble_up(iter->prev->prev, iter->prev, iter, iter->next);
+				break;
+			}
+			iter = iter->next;
+		}
+		if(iter == NULL) {
+			/* this is a new trigram */
+			tmp = malloc(sizeof(Trigram));
+			tmp->trigram[0] = a0;
+			tmp->trigram[1] = a1;
+			tmp->trigram[2] = a2;
+			tmp->occ = 1;
+			trigram_list = g_list_append(trigram_list, tmp);
+		}
+		/* go on */
+		a0 = a1;
+		a1 = a2;
+		a2 = fgetc(fi);
+	}
+}
+
+void
+print_bigrams() {
+	GList *iter = g_list_first(bigram_list);
+
+	while(iter != NULL) {
+		printf("%c%c%14d\n",
+			((Bigram *)iter->data)->bigram[0],
+			((Bigram *)iter->data)->bigram[1],
+			((Bigram *)iter->data)->occ);
+		iter = iter->next;
+        }
+
+
+}
+
+void
+print_trigrams() {
+	GList *iter = g_list_first(trigram_list);
+
+	while(iter != NULL) {
+		printf("%c%c%c%15d\n",
+			((Trigram *)iter->data)->trigram[0],
+			((Trigram *)iter->data)->trigram[1],
+			((Trigram *)iter->data)->trigram[2],
+			((Trigram *)iter->data)->occ);
+		iter = iter->next;
+        }
+}
+	
 int
 main(int argc, char *argv[]) {
 	FILE *fi;
-	Relation r[N];
-	char map[N];
-	int i, c, rl, mapl;
+	int i, c;
 	extern char *optarg;
 	extern int optind, opterr, optopt;
 
 	/* handle command line options */
 	opterr = 0;
-	while((c = getopt(argc, argv, "vscahi:o:l:")) != -1)
+	while((c = getopt(argc, argv, "vscabpthi:o:l:")) != -1)
 		switch(c) {
 			case 'v':
 				die("charemap-"VERSION", © 2009 Marco Squarcina, see LICENSE for details");
 				break;
 			case 's':
-				show = 1;
+				show_occ = 1;
 				break;
 			case 'c':
 				case_sensitive = 1;
 				break;
 			case 'a':
-				alphabetic_only = 1;
+				alpha_only = 1;
+				break;
+			case 'b':
+				show_bigrams = 1;
+				break;
+			case 't':
+				show_trigrams = 1;
+				break;
+			case 'p':
+				print_substituted = 1;
 				break;
 			case 'h':
 				usage();
@@ -283,23 +468,27 @@ main(int argc, char *argv[]) {
         if((fi = fopen(in, "r")) == NULL)
 	                die("Input file not found.");
 	/* create relation */
-	rl = initialize(r, fi);
+	rl = initialize(fi);
 	/* sort array */
-	sort_by_occ(r, rl);
+	sort_by_occ();
 	/* associate each character to a new one */
-	associate(r, rl, map, mapl);
+	associate();
+	count_bigrams(fi);
+        count_trigrams(fi);
 	/* show char set */
-	if(show)
-		show_occ(r, rl);
-	else {
-		/* print translated text file to stdout or a file */
-		if(strlen(out) > 0)
-			print_file(r, rl, fi);
-		else
-			print_video(r, rl, fi);
-	}
+	if(show_occ)
+		print_char_occ();
+	if(show_bigrams)
+		print_bigrams();
+	if(show_trigrams)
+		print_trigrams();
+	/* print translated text file to stdout or a file */
+	if(strlen(out) > 0)
+		print_file(fi);
+	if(print_substituted)
+		print_video(fi);
 	/* close file streams */
         fclose(fi);
-	
+
 	return 0;
 }
