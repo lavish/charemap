@@ -3,7 +3,7 @@
 
 SRC = charemap.c
 VERSION = 0.3
-CFLAGS = -std=c99 -pedantic -Wall -O3 -DVERSION=\"${VERSION}\"
+CFLAGS = -std=c99 -pedantic -O3 -Wall -DVERSION=\"${VERSION}\"
 CPPFLAGS = $(shell pkg-config glib-2.0 --cflags)
 LDLIBS = $(shell pkg-config glib-2.0 --libs)
 CC = gcc

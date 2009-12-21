@@ -35,6 +35,11 @@ typedef struct {
 	int occ;
 } Trigram;
 
+typedef struct {
+	char word[N];
+	int occ;
+} Word;
+
 /* function declarations */
 static void die(const char *error);
 static void usage(void);
@@ -49,13 +54,17 @@ static void print_video(FILE *fi);
 static void bubble_up(GList *a, GList *b, GList *x, GList *c);
 static void count_bigrams(FILE *fi);
 static void count_trigrams(FILE *fi);
+static void count_words(FILE *fi);
 static void print_bigrams(void);
 static void print_trigrams(void);
+static void print_words(void);
+static void free_list(GList *l);
 
 /* variables */
 static int show_occ = 0;
 static int show_bigrams = 0;
 static int show_trigrams = 0;
+static int show_words = 0;
 static int case_sensitive = 0;
 static int alpha_only = 0;
 static int print_substituted = 0;
@@ -67,6 +76,7 @@ static char map[N];
 static int rl, mapl;
 static GList *bigram_list = NULL;
 static GList *trigram_list = NULL;
+static GList *word_list = NULL;
 
 /* function implementations */
 void
@@ -78,7 +88,7 @@ die(const char *errstr) {
 void
 usage() {
 	printf("Usage: charemap [options]...\nOptions:\n");
-	printf("  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n",
+	printf("  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n",
 		"-h",		"This help",
 		"-v",		"Print version",
 		"-s",		"Show only character occurrences and mapping",
@@ -87,6 +97,7 @@ usage() {
 		"-p",		"Print substituted text",
 		"-b",		"Show bigrams",
 		"-t",		"Show trigrams",
+		"-w",		"Show words",
 		"-i <file>",	"Input file to parse",
 		"-o <file>",	"Output file with remapped characters",
 		"-l <language>","Try to decrypt using the selected language (default: en)");
@@ -303,7 +314,7 @@ count_bigrams(FILE *fi) {
 			iter = iter->next;
 		}
 		if(iter == NULL) {
-			/* this is a new trigram */
+			/* this is a new bigram */
 			tmp = malloc(sizeof(Bigram));
 			tmp->bigram[0] = a0;
 			tmp->bigram[1] = a1;
@@ -369,6 +380,49 @@ count_trigrams(FILE *fi) {
 }
 
 void
+count_words(FILE *fi) {
+	char buf[N], c; 
+	Word *tmp = NULL;
+	GList *iter = NULL;
+	int i;
+
+	rewind(fi);
+	while(1) {
+		i = 0;
+		c = fgetc(fi);
+		if(c == EOF)
+			break;
+		while(isalpha(c)) {
+			if(!case_sensitive)
+				c = tolower(c);
+			buf[i++] = c;
+			c = fgetc(fi);
+		}
+		if(i) {
+			buf[i] = '\0';
+			iter = g_list_first(word_list);
+			while(iter != NULL) {
+				if(strcmp(((Word *)iter->data)->word, buf) == 0) {
+					/* word already in word_list */
+					((Word *)iter->data)->occ += 1;
+					while(iter->prev != NULL && ((Word *)iter->prev->data)->occ < ((Word *)iter->data)->occ)
+						bubble_up(iter->prev->prev, iter->prev, iter, iter->next);
+					break;
+				}
+				iter = iter->next;
+			}
+			if(iter == NULL) {
+				/* this is a new word */
+                                tmp = malloc(sizeof(Word));
+                                strcpy(tmp->word, buf);
+                                tmp->occ = 1;
+                                word_list = g_list_append(word_list, tmp);
+			}
+		}
+	}
+}
+
+void
 print_bigrams() {
 	GList *iter = g_list_first(bigram_list);
 
@@ -379,8 +433,6 @@ print_bigrams() {
 			((Bigram *)iter->data)->occ);
 		iter = iter->next;
         }
-
-
 }
 
 void
@@ -396,7 +448,31 @@ print_trigrams() {
 		iter = iter->next;
         }
 }
-	
+
+void
+print_words() {
+	GList *iter = g_list_first(word_list);
+
+	while(iter != NULL) {
+		printf("%-20s%10d\n",
+			((Word *)iter->data)->word,
+			((Word *)iter->data)->occ);
+		iter = iter->next;
+        }
+}
+
+void
+free_list(GList *l) {
+	GList *iter = g_list_first(l);
+
+	while(iter != NULL) {
+		free(iter->data);
+		iter = iter->next;
+	}
+
+	g_list_free(l);
+}
+
 int
 main(int argc, char *argv[]) {
 	FILE *fi;
@@ -406,7 +482,7 @@ main(int argc, char *argv[]) {
 
 	/* handle command line options */
 	opterr = 0;
-	while((c = getopt(argc, argv, "vscabpthi:o:l:")) != -1)
+	while((c = getopt(argc, argv, "vscabptwhi:o:l:")) != -1)
 		switch(c) {
 			case 'v':
 				die("charemap-"VERSION", © 2009 Marco Squarcina, see LICENSE for details");
@@ -425,6 +501,9 @@ main(int argc, char *argv[]) {
 				break;
 			case 't':
 				show_trigrams = 1;
+				break;
+			case 'w':
+				show_words = 1;
 				break;
 			case 'p':
 				print_substituted = 1;
@@ -482,13 +561,21 @@ main(int argc, char *argv[]) {
 		print_bigrams();
 	if(show_trigrams)
 		print_trigrams();
+	if(show_words) {
+		count_words(fi);
+		print_words();
+	}
 	/* print translated text file to stdout or a file */
 	if(strlen(out) > 0)
 		print_file(fi);
 	if(print_substituted)
 		print_video(fi);
-	/* close file streams */
+	/* close file streams and clear memory */
         fclose(fi);
+	free_list(bigram_list);
+	free_list(trigram_list);
+        if(show_words)
+		free_list(word_list);
 
 	return 0;
 }
