@@ -1,10 +1,10 @@
 /*
  * Author:	Marco Squarcina <lavish@gmail.com>
- * Date:	20/12/2009
- * Version:	0.3
+ * Date:	03/01/2010
+ * Version:	0.5
  * License:	MIT, see LICENSE for details
- * Description:	Tiny program to play with substitution ciphers (works also with
- * 		non-standard characters).
+ * Description:	charemap.c, core of charemap, a tiny program to play with
+ * 		substitution ciphers.
  */
 
 #include <string.h>
@@ -13,70 +13,10 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <getopt.h>
-#include <sys/queue.h>
 #include <glib.h>
-
-#define N	256
-
-/* structs */
-typedef struct {
-	unsigned char orig;
-	int occ;
-	unsigned char new;
-} Relation;
-
-typedef struct {
-        int bigram[2];
-        int occ;
-} Bigram;
-
-typedef struct {
-	int trigram[3];
-	int occ;
-} Trigram;
-
-typedef struct {
-	char word[N];
-	int occ;
-} Word;
-
-/* function declarations */
-static void die(const char *error);
-static void usage(void);
-static char substitute(char c);
-static void sort_by_occ(void);
-static int load_lang(char *l, char *map);
-static int initialize(FILE *fi);
-static void associate(void);
-static void print_char_occ(void);
-static void print_file(FILE *fi);
-static void print_video(FILE *fi);
-static void bubble_up(GList *a, GList *b, GList *x, GList *c);
-static void count_bigrams(FILE *fi);
-static void count_trigrams(FILE *fi);
-static void count_words(FILE *fi);
-static void print_bigrams(void);
-static void print_trigrams(void);
-static void print_words(void);
-static void free_list(GList *l);
-
-/* variables */
-static int show_occ = 0;
-static int show_bigrams = 0;
-static int show_trigrams = 0;
-static int show_words = 0;
-static int case_sensitive = 0;
-static int alpha_only = 0;
-static int print_substituted = 0;
-static char in[N];
-static char out[N];
-static char lang[N];
-static Relation r[N];
-static char map[N];
-static int rl, mapl;
-static GList *bigram_list = NULL;
-static GList *trigram_list = NULL;
-static GList *word_list = NULL;
+#include "charemap.h"
+#include "decrypt.h"
+#include "utils.h"
 
 /* function implementations */
 void
@@ -88,19 +28,21 @@ die(const char *errstr) {
 void
 usage() {
 	printf("Usage: charemap [options]...\nOptions:\n");
-	printf("  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n",
-		"-h",		"This help",
-		"-v",		"Print version",
-		"-s",		"Show only character occurrences and mapping",
-		"-c",		"Case sensitive",
-		"-a",		"Remap alpha characters only (preserves dots, blanks and so on...)",
-		"-p",		"Print substituted text",
-		"-b",		"Show bigrams",
-		"-t",		"Show trigrams",
-		"-w",		"Show words",
-		"-i <file>",	"Input file to parse",
-		"-o <file>",	"Output file with remapped characters",
-		"-l <language>","Try to decrypt using the selected language (default: en)");
+	printf("  %-15s %s\n  %-15s %s\n  %-15s %s\n                  %s\n                  %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n  %-15s %s\n",
+		"-h",		"This help.",
+		"-v",		"Print version.",
+		"-d",		"Decrypt the file.", "Warning, this algorithm works ONLY on alphabetic lowercase characters.", "Remap ciphertext with charemap before using this option.",
+		"-s",		"Show only character occurrences and mapping.",
+		"-c",		"Case sensitive.",
+		"-a",		"Remap alpha characters only (preserves dots, blanks and so on...).",
+		"-p",		"Print substituted text.",
+		"-b",		"Show bigrams.",
+		"-t",		"Show trigrams.",
+		"-w",		"Show words.",
+		"-m <file>",	"Use a sample file to generate digram statistics (default samples/moby.txt).",
+		"-i <file>",	"Input file to parse.",
+		"-o <file>",	"Output file with remapped characters.",
+		"-l <file>",	"Remap using the typical character frequency of selected language (default: languages/en.txt).");
 	exit(EXIT_FAILURE);
 }
 
@@ -131,28 +73,17 @@ sort_by_occ() {
 }
 
 int
-load_lang(char *l, char *map) {
-	FILE *f;
+load_lang(FILE *l, char *map) {
 	int c, i = 0;
-	char fname[N];
 
-	strcpy(fname, "languages/");
-	strcat(fname, l);
-	strcat(fname, ".txt");
-	if((f = fopen(fname, "r")) == NULL) 
-		die("Language file not found.");
-	c = fgetc(f);
-	while(c != EOF) {
+	while((c = fgetc(l)) != EOF)
 		map[i++] = c;
-		c = fgetc(f);
-	}
-	fclose(f);
 
-	return i-1;
+	return i;
 }
 
 int
-initialize(FILE *fi) {
+initialize_relation(FILE *fi) {
 	int c, i, j;
 
 	/* reset the relation vector */
@@ -231,264 +162,52 @@ print_char_occ() {
 }
 
 void
-print_file(FILE *fi) {
-	FILE *fo;
+remap_file_to_file(FILE *fi, FILE *fo) {
 	int c;
 
 	rewind(fi);
-	fo = fopen(out, "w");
-	c = fgetc(fi);
-	while(c != EOF) {
+	while((c = fgetc(fi)) != EOF) {
 		putc(substitute(c), fo);
-		c = fgetc(fi);
 	}
-	fclose(fo);
 }
 
 void
-print_video(FILE *fi) {
+remap_to_video(FILE *f) {
 	int c;
 
-	rewind(fi);
+	rewind(f);
 	printf("Substitution output:\n");
-	c = fgetc(fi);
-	while(c != EOF) {
+	while((c = fgetc(f)) != EOF) {
 		putc(substitute(c), stdout);
-		c = fgetc(fi);
 	}
-}
-
-void
-bubble_up(GList *a, GList *b, GList *x, GList *c) {
-	/* a <--> b <--> x <--> c */
-	a = x->prev->prev;
-	b = x->prev;
-	c = x->next;
-
-	/* a <--> b -> c */
-	b->next = c;
-	if(c != NULL)
-		/* a <--> b <--> c */
-		c->prev = b;
-	if(a != NULL)
-		/* a <- b <--> c */
-		a->next = x;
-	/* a -> x <- b <--> c */
-	b->prev = x;
-	/* a <--> x <- b <--> c */
-	x->prev = a;
-	/* a <--> x <--> b <--> c */
-	x->next = b;
-}
-
-void
-count_bigrams(FILE *fi) {
-	int a0, a1;
-	Bigram *tmp = NULL;
-	GList *iter = NULL;
-	
-	rewind(fi);
-	a0 = fgetc(fi);
-	a1 = fgetc(fi);
-	while(1) {
-		while(a1 != EOF && alpha_only && (!isalpha(a0) || !isalpha(a1))) {
-			a0 = a1;
-			a1 = fgetc(fi);
-		}
-		if(a1 == EOF)
-			break;
-	        if(!case_sensitive) {
-			a0 = tolower(a0);
-			a1 = tolower(a1);
-		}
-		iter = g_list_first(bigram_list);
-		while(iter != NULL) {
-			if(((Bigram *)iter->data)->bigram[0] == a0 &&
-			   ((Bigram *)iter->data)->bigram[1] == a1) {
-				/* bigram already in list */
-				((Bigram *)iter->data)->occ += 1;
-				while(iter->prev != NULL && ((Bigram *)iter->prev->data)->occ < ((Bigram *)iter->data)->occ)
-					bubble_up(iter->prev->prev, iter->prev, iter, iter->next);
-				break;
-			}
-			iter = iter->next;
-		}
-		if(iter == NULL) {
-			/* this is a new bigram */
-			tmp = malloc(sizeof(Bigram));
-			tmp->bigram[0] = a0;
-			tmp->bigram[1] = a1;
-			tmp->occ = 1;
-			bigram_list = g_list_append(bigram_list, tmp);
-		}
-		/* go on */
-		a0 = a1;
-		a1 = fgetc(fi);
-	}
-}
-
-void
-count_trigrams(FILE *fi) {
-	int a0, a1, a2;
-	Trigram *tmp = NULL;
-	GList *iter = NULL;
-	
-	rewind(fi);
-	a0 = fgetc(fi);
-	a1 = fgetc(fi);
-	a2 = fgetc(fi);
-	while(1) {
-		while(a2 != EOF && alpha_only && (!isalpha(a0) || !isalpha(a1) || !isalpha(a2))) {
-			a0 = a1;
-			a1 = a2;
-			a2 = fgetc(fi);
-		}
-		if(a2 == EOF)
-			break;
-	        if(!case_sensitive) {
-			a0 = tolower(a0);
-			a1 = tolower(a1);
-			a2 = tolower(a2);
-		}
-		iter = g_list_first(trigram_list);
-		while(iter != NULL) {
-			if(((Trigram *)iter->data)->trigram[0] == a0 &&
-			   ((Trigram *)iter->data)->trigram[1] == a1 &&
-			   ((Trigram *)iter->data)->trigram[2] == a2) {
-				/* trigram already in list */
-				((Trigram *)iter->data)->occ += 1;
-				while(iter->prev != NULL && ((Trigram *)iter->prev->data)->occ < ((Trigram *)iter->data)->occ)
-					bubble_up(iter->prev->prev, iter->prev, iter, iter->next);
-				break;
-			}
-			iter = iter->next;
-		}
-		if(iter == NULL) {
-			/* this is a new trigram */
-			tmp = malloc(sizeof(Trigram));
-			tmp->trigram[0] = a0;
-			tmp->trigram[1] = a1;
-			tmp->trigram[2] = a2;
-			tmp->occ = 1;
-			trigram_list = g_list_append(trigram_list, tmp);
-		}
-		/* go on */
-		a0 = a1;
-		a1 = a2;
-		a2 = fgetc(fi);
-	}
-}
-
-void
-count_words(FILE *fi) {
-	char buf[N], c; 
-	Word *tmp = NULL;
-	GList *iter = NULL;
-	int i;
-
-	rewind(fi);
-	while(1) {
-		i = 0;
-		c = fgetc(fi);
-		if(c == EOF)
-			break;
-		while(isalpha(c)) {
-			if(!case_sensitive)
-				c = tolower(c);
-			buf[i++] = c;
-			c = fgetc(fi);
-		}
-		if(i) {
-			buf[i] = '\0';
-			iter = g_list_first(word_list);
-			while(iter != NULL) {
-				if(strcmp(((Word *)iter->data)->word, buf) == 0) {
-					/* word already in word_list */
-					((Word *)iter->data)->occ += 1;
-					while(iter->prev != NULL && ((Word *)iter->prev->data)->occ < ((Word *)iter->data)->occ)
-						bubble_up(iter->prev->prev, iter->prev, iter, iter->next);
-					break;
-				}
-				iter = iter->next;
-			}
-			if(iter == NULL) {
-				/* this is a new word */
-                                tmp = malloc(sizeof(Word));
-                                strcpy(tmp->word, buf);
-                                tmp->occ = 1;
-                                word_list = g_list_append(word_list, tmp);
-			}
-		}
-	}
-}
-
-void
-print_bigrams() {
-	GList *iter = g_list_first(bigram_list);
-
-	while(iter != NULL) {
-		printf("%c%c%14d\n",
-			((Bigram *)iter->data)->bigram[0],
-			((Bigram *)iter->data)->bigram[1],
-			((Bigram *)iter->data)->occ);
-		iter = iter->next;
-        }
-}
-
-void
-print_trigrams() {
-	GList *iter = g_list_first(trigram_list);
-
-	while(iter != NULL) {
-		printf("%c%c%c%15d\n",
-			((Trigram *)iter->data)->trigram[0],
-			((Trigram *)iter->data)->trigram[1],
-			((Trigram *)iter->data)->trigram[2],
-			((Trigram *)iter->data)->occ);
-		iter = iter->next;
-        }
-}
-
-void
-print_words() {
-	GList *iter = g_list_first(word_list);
-
-	while(iter != NULL) {
-		printf("%-20s%10d\n",
-			((Word *)iter->data)->word,
-			((Word *)iter->data)->occ);
-		iter = iter->next;
-        }
-}
-
-void
-free_list(GList *l) {
-	GList *iter = g_list_first(l);
-
-	while(iter != NULL) {
-		free(iter->data);
-		iter = iter->next;
-	}
-
-	g_list_free(l);
 }
 
 int
 main(int argc, char *argv[]) {
-	FILE *fi;
+	FILE *fi, *fs, *ftmp;
 	int i, c;
-	extern char *optarg;
+	char in[N] = {'\0'};
+	char out[N] = {'\0'};
+	char lang[N] = {'\0'};
+	char sample[N] = {'\0'};
+	GList *word_list = NULL;
+	GList *bigram_list = NULL;
+	GList *trigram_list = NULL;
+        extern char *optarg;
 	extern int optind, opterr, optopt;
 
 	/* handle command line options */
 	opterr = 0;
-	while((c = getopt(argc, argv, "vscabptwhi:o:l:")) != -1)
+	while((c = getopt(argc, argv, "vscdabptwhm:i:o:l:")) != -1)
 		switch(c) {
 			case 'v':
-				die("charemap-"VERSION", © 2009 Marco Squarcina, see LICENSE for details");
+				die("charemap-"VERSION", © 2009-2010 Marco Squarcina, see LICENSE for details");
 				break;
 			case 's':
 				show_occ = 1;
+				break;
+			case 'd':
+				decrypt_flag = 1;
 				break;
 			case 'c':
 				case_sensitive = 1;
@@ -511,6 +230,9 @@ main(int argc, char *argv[]) {
 			case 'h':
 				usage();
 				break;
+			case 'm':
+				strcpy(sample, optarg);
+				break;
 			case 'i':
 				strcpy(in, optarg);
 				break;
@@ -521,7 +243,7 @@ main(int argc, char *argv[]) {
 				strcpy(lang, optarg);
 				break;
 			case '?':
-				if(optopt == 'i' || optopt == 'o' || optopt == 'l')
+				if(optopt == 'i' || optopt == 'o' || optopt == 'l' || optopt == 'm')
 					fprintf(stderr, "Option -%c requires an argument.\n", optopt);
 				else if(isprint(optopt))
 					fprintf(stderr, "Unknown option `-%c'.\n", optopt);
@@ -537,45 +259,58 @@ main(int argc, char *argv[]) {
 	}
 	/* set default language */
 	if(strlen(lang) == 0)
-		strcpy(lang, "en");
-	/* load language file into map */
-	mapl = load_lang(lang, map);
+		strcpy(lang, "languages/en.txt");
+        /* load language file into map */
+        if((ftmp = fopen(lang, "r")) == NULL)
+                die("Language file not found.");
+	mapl = load_lang(ftmp, map);
+	fclose(ftmp);
+	/* check for the sample file */
+	if(strlen(sample) == 0)
+		strcpy(sample, "samples/moby.txt");
+        if((fs = fopen(sample, "r")) == NULL)
+		die("Sample file not found.");
 	/* check for an input file */
-	if(strlen(in) == 0) {
+	if(strlen(in) == 0)
 		die("You need at least an input file!\nTry `-h' for more information.");
-	}
         if((fi = fopen(in, "r")) == NULL)
-	                die("Input file not found.");
+		die("Input file not found.");
 	/* create relation */
-	rl = initialize(fi);
+	rl = initialize_relation(fi);
 	/* sort array */
 	sort_by_occ();
 	/* associate each character to a new one */
 	associate();
-	count_bigrams(fi);
-        count_trigrams(fi);
+	if(decrypt_flag)
+		decrypt(fi, fs);
 	/* show char set */
 	if(show_occ)
 		print_char_occ();
-	if(show_bigrams)
-		print_bigrams();
-	if(show_trigrams)
-		print_trigrams();
+	if(show_bigrams) {
+		bigram_list = count_bigrams(fi, bigram_list, case_sensitive, alpha_only);
+		print_bigrams(bigram_list);
+		free_list(bigram_list);
+	}
+	if(show_trigrams) {
+		trigram_list = count_trigrams(fi, trigram_list, case_sensitive, alpha_only);
+		print_trigrams(trigram_list);
+		free_list(trigram_list);
+	}
 	if(show_words) {
-		count_words(fi);
-		print_words();
+		word_list = count_words(fi, word_list, case_sensitive);
+		print_words(word_list);
+		free_list(word_list);
 	}
 	/* print translated text file to stdout or a file */
-	if(strlen(out) > 0)
-		print_file(fi);
+	if(strlen(out) > 0) {
+		ftmp = fopen(out, "w");
+		remap_file_to_file(fi, ftmp);
+		fclose(ftmp);
+	}
 	if(print_substituted)
-		print_video(fi);
-	/* close file streams and clear memory */
+		remap_to_video(fi);
+	/* close file streams */
         fclose(fi);
-	free_list(bigram_list);
-	free_list(trigram_list);
-        if(show_words)
-		free_list(word_list);
 
 	return 0;
 }

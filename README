@@ -1,8 +1,9 @@
 charemap
 ========
 
-Tiny program to play with substitution ciphers that works also with
-non-standard characters.
+Charemap is a little program to play with substitution ciphers. It's able to
+remap text, perform characters and word analysis and to automatically decrypt
+ciphertext.
 
 
 Requirements
@@ -22,116 +23,48 @@ See ./charemap -h
 
 Example
 -------
-Here is a typical usage of charemap. "/tmp/foo.txt" is the cipher-text we want
-to decode.
+Here is an example of automatic decryption with a ciphertext shipped with
+charemap:
 
-	0 $ cat /tmp/foo.txt 
-	JTRFCYL KZBLKRZPULI YPBCYSCJY PFF BLJ ZJNMCZJXJTBY
-	KS BLJ EPTKTY KS ZJUMBPACFCBI
-	MTDJZ BLJ FPH KS EKTYUCEMKMY HPYBJ.
-	CB CY PZELPCE, EMXAZKMY, PTD CTJSSJEBCVJ;
-	CBY PENMCYCBCKT EKTYMXJY XMEL BCXJ PTD JSSKZB;
-	SPCFMZJ BK PENMCZJ CB CY JPYI KS DJBJEBCKT.
+./charemap -i ciphers/tobeornot.txt -d -m samples/dorian.txt 
 
-The following invocation shows only character occurrences and mapping:
+Decripting using bigram and trigram detection...
+done!
 
-	0 $ ./charemap -i /tmp/foo.txt -s
-	  Original Char |     Occurrences |     Mapped char |
-	-----------------------------------------------------
-		    ' ' |              32 |               e |
-		      j |              22 |               t |
-		      c |              22 |               a |
-		      b |              19 |               o |
-		      y |              17 |               n |
-		      k |              15 |               r |
-		      p |              15 |               i |
-		      t |              12 |               s |
-		      m |              12 |               h |
-		      e |              12 |               d |
-		      z |              11 |               l |
-		      s |              10 |               f |
-		      l |               8 |               c |
-		      f |               6 |               m |
-		     \n |               6 |               u |
-		      x |               5 |               g |
-		      d |               4 |               y |
-		      u |               3 |               p |
-		      i |               3 |               w |
-		      n |               3 |               b |
-		      r |               2 |               v |
-		      a |               2 |               k |
-		      h |               2 |               x |
-		      . |               2 |               j |
-		      , |               2 |               q |
-		      ; |               2 |               z |
-		      v |               1 |               ? |
+The mapping found is:
 
-We can do the same thing working only on letters:
+	<- etaoihnsrdlumwyfcgpbvkxqjz
+	   ||||||||||||||||||||||||||
+	-> jzfusrgtkxapyeilwomdnhbqcv
 
-	0 $ ./charemap -i /tmp/foo.txt -s -a
-	  Original Char |     Occurrences |     Mapped char |
-	-----------------------------------------------------
-		    ' ' |              32 |             ' ' |
-		      j |              22 |               e |
-		      c |              22 |               t |
-		      b |              19 |               a |
-		      y |              17 |               o |
-		      k |              15 |               n |
-		      p |              15 |               r |
-		      t |              12 |               i |
-		      m |              12 |               s |
-		      e |              12 |               h |
-		      z |              11 |               d |
-		      s |              10 |               l |
-		      l |               8 |               f |
-		      f |               6 |               c |
-		     \n |               6 |              \n |
-		      x |               5 |               m |
-		      d |               4 |               u |
-		      u |               3 |               g |
-		      i |               3 |               y |
-		      n |               3 |               p |
-		      r |               2 |               w |
-		      a |               2 |               b |
-		      h |               2 |               v |
-		      . |               2 |               . |
-		      , |               2 |               , |
-		      ; |               2 |               ; |
-		      v |               1 |               k |
+Decryption result:
 
-Let's try to decode foo.txt using the standard english letter frequency:
+to me, or not to me: that is the fuestion:
+whether 'tis nomver in the yink to suller
+the svings ank arrows ol outrageous lortune,
+or to tabe a arys against a sea ol troumves,
+ank mp oddosing enk they. to kie: to sveed;
+no yore; ank mp a sveed to sap we enk
+the heartache, ank the thousank naturav shocbs
+that lvesh is heir to.
 
-	0 $ ./charemap -i /tmp/foo.txt -a
-	Substitution output:
-	eiwctof ndafnwdrgfy oratolteo rcc afe depstdemeiao
-	nl afe hrinio nl degsarbtctay
-	siued afe crv nl hniogthsnso vroae.
-	ta to rdhfrth, hsmbdnso, riu tiellehatke;
-	tao rhpstotatni hniosmeo mshf atme riu ellnda;
-	lrtcsde an rhpstde ta to eroy nl ueaehatni.
+Affining result with dictionary-based decryption...
+done!
 
-This is the language file used:
+The mapping found is:
 
-	0 $ cat languages/en.txt
-	etaonrishdlfcmugypwbvkxjqz
+	<- etaoihnsrdlumwyfcgpbvkxqjz
+	   ||||||||||||||||||||||||||
+	-> jzqusrgtdxaymeifwobpnhkvcl
 
-After some tries, the correct letter frequency key for our sample file appeared
-to be this one:
+Decryption result:
 
-	0 $ cat languages/tmp.txt 
-	eitsoanucrfhlmdpyqgbwvxjkz
+to be, or not to be: that is the question:
+whether 'tis nobler in the mind to suffer
+the slings and arrows of outrageous fortune,
+or to take a arms against a sea of troubles,
+and by opposing end them. to die: to sleep;
+no more; and by a sleep to say we end
+the heartache, and the thousand natural shocks
+that flesh is heir to.
 
-Fine, it works:
-
-	0 $ ./charemap -i /tmp/foo.txt -a -l tmp
-	Substitution output:
-	english orthography satisfies all the requirements
-	of the canons of reputability
-	under the law of conspicuous waste.
-	it is archaic, cumbrous, and ineffective;
-	its acquisition consumes much time and effort;
-	failure to acquire it is easy of detection.
-
-You can save the decoded output to a file using option "-o":
-
-	0 $ ./charemap -i /tmp/foo.txt -a -l tmp -o /tmp/foo_decoded.txt
