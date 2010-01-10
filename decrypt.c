@@ -1,6 +1,6 @@
 /*
  * Author:      Marco Squarcina <lavish@gmail.com>
- * Date:        03/01/2010
+ * Date:        10/01/2010
  * Version:     0.5
  * License:     MIT, see LICENSE for details
  * Description: decrypt.c, implementation of an improved jackobsen algorithm
@@ -204,7 +204,7 @@ bigram_goodness(float m1[KEYSIZE][KEYSIZE], float m2[KEYSIZE][KEYSIZE]) {
 
 	for(i=0; i<KEYSIZE; i++)
 		for(j=0; j<KEYSIZE; j++)
-			t += fabs(m1[i][j] - m2[i][j]);
+			t += fabsf(m1[i][j] - m2[i][j]);
 
 	return t;
 }
@@ -217,7 +217,7 @@ trigram_goodness(float m1[KEYSIZE][KEYSIZE][KEYSIZE], float m2[KEYSIZE][KEYSIZE]
 	for(i=0; i<KEYSIZE; i++)
 		for(j=0; j<KEYSIZE; j++) 
 			for(k=0; k<KEYSIZE; k++) 
-				t += fabs(m1[i][j][k] - m2[i][j][k]);
+				t += fabsf(m1[i][j][k] - m2[i][j][k]);
 	return t;
 }
 

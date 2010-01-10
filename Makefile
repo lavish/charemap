@@ -1,12 +1,8 @@
 # charemap - play with substitution ciphers
 # See LICENSE file for copyright and license details.
 
-PROJECT  = charemap
-VERSION  = 0.5
-CFLAGS   = -std=c99 -pedantic -Wall -Wextra -march=native -DVERSION=\"${VERSION}\"
-CPPFLAGS = $(shell pkg-config glib-2.0 --cflags)
-LDLIBS   = $(shell pkg-config glib-2.0 --libs)
-CC       = gcc
+include config.mk
+
 OBJ      = charemap.o decrypt.o utils.o
 SRC	 = charemap.c decrypt.c utils.c charemap.h decrypt.h utils.h
 
