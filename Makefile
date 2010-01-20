@@ -22,7 +22,7 @@ clean:
 dist: clean
 	@echo creating dist tarball
 	mkdir -p charemap-${VERSION}
-	@cp -R README LICENSE Makefile languages samples ciphers ${SRC} charemap-${VERSION}
+	@cp -R README LICENSE Makefile config.mk languages samples ciphers ${SRC} charemap-${VERSION}
 	@tar --exclude=".svn" -cf charemap-${VERSION}.tar charemap-${VERSION}
 	@gzip charemap-${VERSION}.tar
 	rm -rf charemap-${VERSION}
