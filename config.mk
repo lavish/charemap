@@ -2,7 +2,7 @@
 PROJECT  = charemap
 
 # charemap version
-VERSION  = 0.5
+VERSION  = 0.6
 
 # flags
 CFLAGS   = -std=c99 -pedantic -Wall -Wextra -march=native -DVERSION=\"${VERSION}\" -O3
